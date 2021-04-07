@@ -1,7 +1,6 @@
 package com.example.notification
 
 
-import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -15,13 +14,17 @@ import android.graphics.Color
 import android.media.AudioAttributes
 import android.media.MediaMetadata
 import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
+import android.provider.Settings
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.view.View
 import android.widget.ImageButton
 import android.widget.TextView
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
@@ -105,6 +108,7 @@ class MainActivity : AppCompatActivity() ,Playable {
                     .setColor(Color.BLUE)
                      .setPriority(NotificationCompat.PRIORITY_HIGH)
                     .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                .setOnlyAlertOnce(true)
 
             notificationManager.notify(100, notificationBuilder.build())
         }
@@ -217,6 +221,7 @@ class MainActivity : AppCompatActivity() ,Playable {
             .addAction(playButton, "Play", pendingIntentPlay)
             .addAction(R.drawable.ic_next, "Next", pendingIntentNext)
             .addAction(R.drawable.ic_like, "Like", null)
+            .setOnlyAlertOnce(true)
             .setStyle(
                     androidx.media.app.NotificationCompat.MediaStyle()
                             .setShowActionsInCompactView(1, 2, 3)
@@ -471,6 +476,107 @@ class MainActivity : AppCompatActivity() ,Playable {
 
     }
 
+    fun progress(view: View) {
+        val rand = Random()
+        val  progressMax = 100
+
+        val notificationManager =  getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val notificationChannel = NotificationChannel(
+                "Channel_id_progress", "Channel_name_progress", NotificationManager.IMPORTANCE_LOW
+            )
+
+
+            notificationChannel.description = "Channel_description_progress"
+            notificationManager.createNotificationChannel(notificationChannel)
+        }
+        val notificationBuilder = NotificationCompat.Builder(this, "Channel_id_progress")
+
+
+        notificationBuilder.setAutoCancel(true)
+            .setWhen(System.currentTimeMillis())
+            .setSmallIcon(R.drawable.ic_baseline_notifications_active_24)
+            .setTicker(resources.getString(R.string.app_name))
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setAutoCancel(false)
+            .setContentTitle("Download")
+            .setContentText("Download in progress")
+            .setOnlyAlertOnce(true)
+            .setProgress(progressMax, 0, true)
+
+        notificationManager.notify(101, notificationBuilder.build())
+
+        Thread(Runnable {
+            SystemClock.sleep(2000)
+            var progress = 0
+            while (progress <= progressMax) {
+
+                notificationBuilder.setProgress(progressMax, progress, false)
+                    .setAutoCancel(false)
+                notificationManager.notify(101, notificationBuilder.build())
+                SystemClock.sleep(1000)
+                progress += 20
+            }
+            notificationBuilder.setContentText("Download finished")
+                .setProgress(0, 0, false)
+                .setAutoCancel(true)
+            notificationManager.notify(101, notificationBuilder.build())
+        }).start()
+
+    }
+
+    fun check(view: View) {
+        val rand = Random()
+        val idNotification = rand.nextInt(1000000000)
+
+        val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        val notificationManager =  getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+
+        @RequiresApi(Build.VERSION_CODES.N)
+        if (!notificationManager.areNotificationsEnabled()) {
+            openNotificationSettings()
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            isChannelBlocked("Channel_id_check")) {
+            openChannelSettings("Channel_id_check")
+            return
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val notificationChannel = NotificationChannel(
+                "Channel_id_check", "Channel_name_check", NotificationManager.IMPORTANCE_HIGH
+            )
+            val attributes = AudioAttributes.Builder()
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .build()
+
+            notificationChannel.description = "Channel_description_check"
+            notificationChannel.enableLights(true)
+            notificationChannel.enableVibration(true)
+            notificationChannel.setSound(soundUri, attributes)
+            notificationManager.createNotificationChannel(notificationChannel)
+        }
+        val notificationBuilder = NotificationCompat.Builder(this, "Channel_id_check")
+
+
+        notificationBuilder.setAutoCancel(true)
+            .setWhen(System.currentTimeMillis())
+            .setSmallIcon(R.drawable.ic_baseline_notifications_active_24)
+            .setTicker(resources.getString(R.string.app_name))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setSound(soundUri)
+            .setContentTitle("Title")
+            .setContentText("message")
+        notificationManager.notify(idNotification, notificationBuilder.build())
+    }
+
+
+
+
 
     fun play(view: View) {
         if (isPlaying){
@@ -504,6 +610,36 @@ class MainActivity : AppCompatActivity() ,Playable {
             // play the first track again
         }
 
+    }
+
+
+    private fun openNotificationSettings() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+            intent.putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+            startActivity(intent)
+        } else {
+            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+            intent.data = Uri.parse("package:$packageName")
+            startActivity(intent)
+        }
+    }
+
+    @RequiresApi(26)
+    private fun isChannelBlocked(channelId: String): Boolean {
+        val manager =
+            getSystemService(NotificationManager::class.java)
+        val channel = manager.getNotificationChannel(channelId)
+        return channel != null &&
+                channel.importance == NotificationManager.IMPORTANCE_NONE
+    }
+
+    @RequiresApi(26)
+    private fun openChannelSettings(channelId: String) {
+        val intent = Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+        intent.putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+        intent.putExtra(Settings.EXTRA_CHANNEL_ID, channelId)
+        startActivity(intent)
     }
 
     override fun onTrackPrevious() {

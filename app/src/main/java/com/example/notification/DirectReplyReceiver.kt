@@ -12,7 +12,7 @@ class DirectReplyReceiver : BroadcastReceiver() {
         val remoteInput: Bundle = RemoteInput.getResultsFromIntent(intent)
         if (remoteInput != null) {
             val replyText = remoteInput.getString("key_text_reply")
-            val answer = Message(replyText!!, null)
+            val answer = Message(replyText!!, "you")
             MainActivity.MESSAGES.add(answer)
             MainActivity.sendMessage(context!!)
         }
